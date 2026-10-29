@@ -54,6 +54,7 @@ export default async function RootLayout({
   let disableYellowFilter =
     process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true';
   let fluidSearch = process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false';
+  let enableWebLive = false;
   let customCategories = [] as {
     name: string;
     type: 'movie' | 'tv';
@@ -77,6 +78,7 @@ export default async function RootLayout({
       query: category.query,
     }));
     fluidSearch = config.SiteConfig.FluidSearch;
+    enableWebLive = config.SiteConfig.EnableWebLive ?? false;
   }
 
   // 将运行时配置注入到全局 window 对象，供客户端在运行时读取
@@ -89,6 +91,7 @@ export default async function RootLayout({
     DISABLE_YELLOW_FILTER: disableYellowFilter,
     CUSTOM_CATEGORIES: customCategories,
     FLUID_SEARCH: fluidSearch,
+    ENABLE_WEB_LIVE: enableWebLive,
   };
 
   return (
@@ -103,7 +106,11 @@ export default async function RootLayout({
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.RUNTIME_CONFIG = ${JSON.stringify(runtimeConfig)};`,
+            // 转义 < 与分隔符，避免站点名/公告等配置内容中的 </script> 提前闭合脚本标签
+            __html: `window.RUNTIME_CONFIG = ${JSON.stringify(runtimeConfig)
+              .replace(/</g, '\\u003c')
+              .replace(/\u2028/g, '\\u2028')
+              .replace(/\u2029/g, '\\u2029')};`,
           }}
         />
       </head>

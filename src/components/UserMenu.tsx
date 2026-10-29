@@ -88,9 +88,7 @@ export const UserMenu: React.FC = () => {
 
   // 豆瓣图片代理选项
   const doubanImageProxyTypeOptions = [
-    { value: 'direct', label: '直连（浏览器直接请求豆瓣）' },
     { value: 'server', label: '服务器代理（由服务器代理请求豆瓣）' },
-    { value: 'img3', label: '豆瓣官方精品 CDN（阿里云）' },
     {
       value: 'cmliussss-cdn-tencent',
       label: '豆瓣 CDN By CMLiussss（腾讯云）',
@@ -99,7 +97,7 @@ export const UserMenu: React.FC = () => {
     { value: 'custom', label: '自定义代理' },
   ];
 
-  // 修改密码相关状态
+  const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -159,10 +157,13 @@ export const UserMenu: React.FC = () => {
       );
       const defaultDoubanImageProxyType =
         (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'cmliussss-cdn-tencent';
+      // 兼容历史数据：直连和豆瓣官方精品 CDN 统一使用服务器代理
+      const normalizeImageProxyType = (type: string) =>
+        type === 'direct' || type === 'img3' ? 'server' : type;
       if (savedDoubanImageProxyType !== null) {
-        setDoubanImageProxyType(savedDoubanImageProxyType);
+        setDoubanImageProxyType(normalizeImageProxyType(savedDoubanImageProxyType));
       } else if (defaultDoubanImageProxyType) {
-        setDoubanImageProxyType(defaultDoubanImageProxyType);
+        setDoubanImageProxyType(normalizeImageProxyType(defaultDoubanImageProxyType));
       }
 
       const savedDoubanImageProxyUrl = localStorage.getItem(
@@ -276,6 +277,7 @@ export const UserMenu: React.FC = () => {
   const handleChangePassword = () => {
     setIsOpen(false);
     setIsChangePasswordOpen(true);
+    setOldPassword('');
     setNewPassword('');
     setConfirmPassword('');
     setPasswordError('');
@@ -283,6 +285,7 @@ export const UserMenu: React.FC = () => {
 
   const handleCloseChangePassword = () => {
     setIsChangePasswordOpen(false);
+    setOldPassword('');
     setNewPassword('');
     setConfirmPassword('');
     setPasswordError('');
@@ -290,20 +293,23 @@ export const UserMenu: React.FC = () => {
 
   const handleSubmitChangePassword = async () => {
     setPasswordError('');
-
-    // 验证密码
-    if (!newPassword) {
-      setPasswordError('新密码不得为空');
+    if (!oldPassword) {
+      setPasswordError('旧密码不得为空');
       return;
     }
-
+    if (!newPassword || newPassword.trim().length < 6) {
+      setPasswordError('新密码长度至少为6位');
+      return;
+    }
+    if (oldPassword === newPassword) {
+      setPasswordError('新密码不能与旧密码相同');
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setPasswordError('两次输入的密码不一致');
       return;
     }
-
     setPasswordLoading(true);
-
     try {
       const response = await fetch('/api/change-password', {
         method: 'POST',
@@ -311,18 +317,15 @@ export const UserMenu: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          oldPassword,
           newPassword,
         }),
       });
-
       const data = await response.json();
-
       if (!response.ok) {
         setPasswordError(data.error || '修改密码失败');
         return;
       }
-
-      // 修改成功，关闭弹窗并登出
       setIsChangePasswordOpen(false);
       await handleLogout();
     } catch (error) {
@@ -422,8 +425,11 @@ export const UserMenu: React.FC = () => {
       (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent';
     const defaultDoubanProxy =
       (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY || '';
-    const defaultDoubanImageProxyType =
+    let defaultDoubanImageProxyType =
       (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'cmliussss-cdn-tencent';
+    if (defaultDoubanImageProxyType === 'direct' || defaultDoubanImageProxyType === 'img3') {
+      defaultDoubanImageProxyType = 'server';
+    }
     const defaultDoubanImageProxyUrl =
       (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
     const defaultFluidSearch =
@@ -1017,9 +1023,20 @@ export const UserMenu: React.FC = () => {
             </button>
           </div>
 
-          {/* 表单 */}
           <div className='space-y-4'>
-            {/* 新密码输入 */}
+            <div>
+              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                旧密码
+              </label>
+              <input
+                type='password'
+                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400'
+                placeholder='请输入旧密码'
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                disabled={passwordLoading}
+              />
+            </div>
             <div>
               <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
                 新密码
@@ -1027,14 +1044,12 @@ export const UserMenu: React.FC = () => {
               <input
                 type='password'
                 className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400'
-                placeholder='请输入新密码'
+                placeholder='请输入新密码，至少6位'
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={passwordLoading}
               />
             </div>
-
-            {/* 确认密码输入 */}
             <div>
               <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
                 确认密码
@@ -1049,15 +1064,12 @@ export const UserMenu: React.FC = () => {
               />
             </div>
 
-            {/* 错误信息 */}
             {passwordError && (
               <div className='text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-md border border-red-200 dark:border-red-800'>
                 {passwordError}
               </div>
             )}
           </div>
-
-          {/* 操作按钮 */}
           <div className='flex gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700'>
             <button
               onClick={handleCloseChangePassword}
@@ -1069,7 +1081,7 @@ export const UserMenu: React.FC = () => {
             <button
               onClick={handleSubmitChangePassword}
               className='flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-              disabled={passwordLoading || !newPassword || !confirmPassword}
+              disabled={passwordLoading || !oldPassword || !newPassword || !confirmPassword}
             >
               {passwordLoading ? '修改中...' : '确认修改'}
             </button>
